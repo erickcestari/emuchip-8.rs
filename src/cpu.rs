@@ -114,6 +114,9 @@ impl Cpu {
             Opcode::AddImm { x, kk } => {
                 self.v[x] = self.v[x].wrapping_add(kk);
             }
+            Opcode::LoadReg { x, y } => {
+                self.v[x] = self.v[y];
+            }
             Opcode::Or { x, y } => {
                 self.v[x] |= self.v[y];
             }
@@ -124,9 +127,12 @@ impl Cpu {
                 self.v[x] ^= self.v[y];
             }
             Opcode::AddReg { x, y } => {
-                self.v[x] = self.v[x].wrapping_add(self.v[y]);
+                let (result, overflow) = self.v[x].overflowing_add(self.v[y]);
+                self.v[0xF] = if overflow { 1 } else { 0 };
+                self.v[x] = result;
             }
             Opcode::SubReg { x, y } => {
+                self.v[0xF] = if self.v[x] >= self.v[y] { 1 } else { 0 };
                 self.v[x] = self.v[x].wrapping_sub(self.v[y]);
             }
             Opcode::ShiftRight { x } => {
@@ -134,7 +140,7 @@ impl Cpu {
                 self.v[x] = self.v[x].wrapping_shr(1);
             }
             Opcode::SubN { x, y } => {
-                self.v[0xF] = if self.v[x] < self.v[y] { 1 } else { 0 };
+                self.v[0xF] = if self.v[y] >= self.v[x] { 1 } else { 0 };
                 self.v[x] = self.v[y].wrapping_sub(self.v[x]);
             }
             Opcode::ShiftLeft { x } => {
@@ -157,9 +163,6 @@ impl Cpu {
             }
             Opcode::Draw { x, y, n } => {
                 unreachable!();
-                for _ in 0..n {
-                    self.display[self.v[x] as usize + self.v[y] as usize] = self.v[0xF];
-                }
             }
             Opcode::SkipKey { x } => {
                 if self.keys[self.v[x] as usize] {
@@ -195,7 +198,24 @@ impl Cpu {
             Opcode::RegDump { x } => {
                 unreachable!()
             }
-            _ => unreachable!(),
+            Opcode::RegLoad { x } => {
+                unreachable!()
+            }
+            Opcode::SkipEqImm { x, conditon } => {
+                if self.v[x] == conditon {
+                    self.pc += 2;
+                }
+            }
+            Opcode::SkipDifImm { x, conditon } => {
+                if self.v[x] != conditon {
+                    self.pc += 2;
+                }
+            }
+            Opcode::SkipEq { x, y } => {
+                if self.v[x] == self.v[y] {
+                    self.pc += 2;
+                }
+            }
         }
     }
 
