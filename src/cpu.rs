@@ -77,9 +77,10 @@ impl Cpu {
     }
 
     pub fn fetch_opcode(&self) -> u16 {
-        let hi = self.memory[self.pc as usize] as u16;
-        let lo = self.memory[(self.pc + 1) as usize] as u16;
-        (hi << 8) | lo
+        u16::from_be_bytes([
+            self.memory[self.pc as usize],
+            self.memory[self.pc as usize + 1],
+        ])
     }
 
     pub fn step(&mut self) {
@@ -113,6 +114,13 @@ impl Cpu {
             Opcode::AddImm { x, kk } => {
                 self.v[x] = self.v[x].wrapping_add(kk);
             }
+            Opcode::Or { x, y } => {
+                self.v[x] |= self.v[y];
+            }
+            Opcode::And { x, y } => {
+                self.v[x] &= self.v[y];
+            }
+            _ => unreachable!(),
         }
     }
 
@@ -254,5 +262,25 @@ mod tests {
         cpu.tick_timers();
         assert_eq!(cpu.delay_timer, 0);
         assert_eq!(cpu.sound_timer, 0);
+    }
+
+    #[test]
+    fn opcode_or() {
+        let mut cpu = Cpu::new();
+        cpu.v[0] = 0xf0;
+        cpu.v[1] = 0x0f;
+        cpu.execute(Opcode::Or { x: 0, y: 1 });
+
+        assert_eq!(cpu.v[0], 0xff);
+    }
+
+    #[test]
+    fn opcode_and() {
+        let mut cpu = Cpu::new();
+        cpu.v[0] = 0xf0;
+        cpu.v[1] = 0x0f;
+        cpu.execute(Opcode::And { x: 0, y: 1 });
+
+        assert_eq!(cpu.v[0], 0x00);
     }
 }
