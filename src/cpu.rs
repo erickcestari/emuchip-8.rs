@@ -120,6 +120,81 @@ impl Cpu {
             Opcode::And { x, y } => {
                 self.v[x] &= self.v[y];
             }
+            Opcode::Xor { x, y } => {
+                self.v[x] ^= self.v[y];
+            }
+            Opcode::AddReg { x, y } => {
+                self.v[x] = self.v[x].wrapping_add(self.v[y]);
+            }
+            Opcode::SubReg { x, y } => {
+                self.v[x] = self.v[x].wrapping_sub(self.v[y]);
+            }
+            Opcode::ShiftRight { x } => {
+                self.v[0xF] = self.v[x] & 0x1;
+                self.v[x] = self.v[x].wrapping_shr(1);
+            }
+            Opcode::SubN { x, y } => {
+                self.v[0xF] = if self.v[x] < self.v[y] { 1 } else { 0 };
+                self.v[x] = self.v[y].wrapping_sub(self.v[x]);
+            }
+            Opcode::ShiftLeft { x } => {
+                self.v[0xF] = self.v[x] >> 7;
+                self.v[x] = self.v[x].wrapping_shl(1);
+            }
+            Opcode::SkipNeqReq { x, y } => {
+                if self.v[x] != self.v[y] {
+                    self.pc += 2;
+                }
+            }
+            Opcode::LoadI { addr } => {
+                self.i = addr;
+            }
+            Opcode::JumpV0 { addr } => {
+                self.pc = addr.wrapping_add(self.v[0] as u16);
+            }
+            Opcode::Random { x, nn } => {
+                self.v[x] = rand::random::<u8>() & nn;
+            }
+            Opcode::Draw { x, y, n } => {
+                unreachable!();
+                for _ in 0..n {
+                    self.display[self.v[x] as usize + self.v[y] as usize] = self.v[0xF];
+                }
+            }
+            Opcode::SkipKey { x } => {
+                if self.keys[self.v[x] as usize] {
+                    self.pc += 2;
+                }
+            }
+            Opcode::SkipNotKey { x } => {
+                if !self.keys[self.v[x] as usize] {
+                    self.pc += 2;
+                }
+            }
+            Opcode::LoadDelayTimer { x } => {
+                self.v[x] = self.delay_timer;
+            }
+            Opcode::GetKey { x } => {
+                unreachable!()
+            }
+            Opcode::SetDelayTimer { x } => {
+                self.delay_timer = self.v[x];
+            }
+            Opcode::SetSoundTimer { x } => {
+                self.sound_timer = self.v[x];
+            }
+            Opcode::AddI { x } => {
+                self.i = self.i.wrapping_add(self.v[x] as u16);
+            }
+            Opcode::LoadSprite { x } => {
+                unreachable!()
+            }
+            Opcode::StoreBCD { x } => {
+                unreachable!()
+            }
+            Opcode::RegDump { x } => {
+                unreachable!()
+            }
             _ => unreachable!(),
         }
     }
