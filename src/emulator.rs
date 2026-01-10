@@ -1,75 +1,77 @@
 use crate::cpu::Cpu;
-use crate::input::keycode_to_chip8;
-use crate::renderer::Renderer;
-use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
-use std::time::{Duration, Instant};
 
-const CYCLES_PER_FRAME: u32 = 10;
-const FRAME_DURATION: Duration = Duration::from_micros(16667); // ~60 FPS
+pub const DISPLAY_WIDTH: usize = 64;
+pub const DISPLAY_HEIGHT: usize = 32;
+pub const CYCLES_PER_FRAME: u32 = 10;
 
-pub struct Emulator {
-    cpu: Cpu,
-    renderer: Renderer,
+pub struct CpuState {
+    pub v: [u8; 16],
+    pub i: u16,
+    pub pc: u16,
+    pub sp: u8,
+    pub delay_timer: u8,
+    pub sound_timer: u8,
 }
 
-impl Emulator {
+pub trait Emulator {
+    /// Create a new emulator instance with the given ROM
+    fn new(rom: &[u8]) -> Self;
+
+    /// Run a single frame (should be called at ~60 FPS)
+    /// Returns false if the emulator should quit
+    fn step_frame(&mut self) -> bool;
+
+    /// Set a key state (key: 0-15, pressed: true/false)
+    fn set_key(&mut self, key: u8, pressed: bool);
+
+    /// Get the display buffer (64x32 pixels, 1 = on, 0 = off)
+    fn display(&self) -> &[u8];
+
+    /// Get the current sound timer value (beep if > 0)
+    fn sound_timer(&self) -> u8;
+}
+
+/// Core emulator without any platform-specific code
+pub struct Chip8 {
+    cpu: Cpu,
+}
+
+impl Chip8 {
     pub fn new(rom: &[u8]) -> Self {
         let mut cpu = Cpu::new();
         cpu.load_rom(rom);
-        let renderer = Renderer::new();
-
-        Self { cpu, renderer }
+        Self { cpu }
     }
 
-    pub fn run(&mut self) {
-        loop {
-            let frame_start = Instant::now();
+    pub fn step_frame(&mut self) {
+        for _ in 0..CYCLES_PER_FRAME {
+            self.cpu.step();
+        }
+        self.cpu.tick_timers();
+    }
 
-            if !self.handle_input() {
-                break;
-            }
-
-            for _ in 0..CYCLES_PER_FRAME {
-                self.cpu.step();
-            }
-
-            self.cpu.tick_timers();
-            self.renderer.update_audio(self.cpu.sound_timer);
-            self.renderer.draw(&self.cpu.display);
-
-            let elapsed = frame_start.elapsed();
-            if elapsed < FRAME_DURATION {
-                std::thread::sleep(FRAME_DURATION - elapsed);
-            }
+    pub fn set_key(&mut self, key: u8, pressed: bool) {
+        if (key as usize) < 16 {
+            self.cpu.keys[key as usize] = pressed;
         }
     }
 
-    fn handle_input(&mut self) -> bool {
-        for event in self.renderer.event_pump().poll_iter() {
-            match event {
-                Event::Quit { .. }
-                | Event::KeyDown {
-                    keycode: Some(Keycode::Escape),
-                    ..
-                } => return false,
-                Event::KeyDown {
-                    keycode: Some(key), ..
-                } => {
-                    if let Some(chip8_key) = keycode_to_chip8(key) {
-                        self.cpu.keys[chip8_key] = true;
-                    }
-                }
-                Event::KeyUp {
-                    keycode: Some(key), ..
-                } => {
-                    if let Some(chip8_key) = keycode_to_chip8(key) {
-                        self.cpu.keys[chip8_key] = false;
-                    }
-                }
-                _ => {}
-            }
+    pub fn display(&self) -> &[u8] {
+        &self.cpu.display
+    }
+
+    pub fn sound_timer(&self) -> u8 {
+        self.cpu.sound_timer
+    }
+
+    pub fn cpu_state(&self) -> CpuState {
+        CpuState {
+            v: self.cpu.v,
+            i: self.cpu.i,
+            pc: self.cpu.pc,
+            sp: self.cpu.sp,
+            delay_timer: self.cpu.delay_timer,
+            sound_timer: self.cpu.sound_timer,
         }
-        true
     }
 }

@@ -1,13 +1,13 @@
-pub mod audio;
 pub mod cpu;
 pub mod emulator;
-pub mod input;
+pub mod emulator_sdl2;
 pub mod opcode;
-pub mod renderer;
 
-use emulator::Emulator;
 use std::env;
 use std::fs;
+
+use crate::emulator_sdl2::EmulatorSdl2;
+use emulator::Emulator;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -17,6 +17,6 @@ fn main() {
     }
 
     let rom = fs::read(&args[1]).expect("Failed to read ROM file");
-    let mut emulator = Emulator::new(&rom);
+    let mut emulator = EmulatorSdl2::new(&rom);
     emulator.run();
 }
