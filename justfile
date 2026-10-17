@@ -16,7 +16,7 @@ build:
 check:
     cargo +nightly fmt --all -- --check
     cargo check
-    cargo clippy -- -D warnings
+    cargo clippy --workspace --all-targets -- -D warnings
 
 # Delete files: example, target, lockfile
 delete item="examples":
@@ -26,11 +26,12 @@ delete item="examples":
 fmt:
     cargo +nightly fmt
 
-run:
-    cargo run
+# Run a ROM in the SDL2 frontend
+run rom="Tetris [Fran Dachille, 1991].ch8":
+    cargo run -p emuchip-8-sdl -- "{{ rom }}"
 
 test:
-    cargo test
+    cargo test --workspace
 
 _delete-target:
     rm -rf target/

@@ -1,4 +1,4 @@
-use crate::emulator::{Chip8, CpuState, DISPLAY_HEIGHT, DISPLAY_WIDTH, Emulator};
+use emuchip_8::{Chip8, CpuState, DISPLAY_HEIGHT, DISPLAY_WIDTH, Error};
 use sdl2::AudioSubsystem;
 use sdl2::EventPump;
 use sdl2::audio::{AudioCallback, AudioDevice, AudioSpecDesired};
@@ -7,7 +7,7 @@ use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::Canvas;
-use sdl2::ttf::Sdl2TtfContext;
+use sdl2::ttf::{Font, Sdl2TtfContext};
 use sdl2::video::Window;
 use std::time::{Duration, Instant};
 
@@ -71,7 +71,7 @@ impl Audio {
     }
 }
 
-fn keycode_to_chip8(keycode: Keycode) -> Option<usize> {
+fn keycode_to_chip8(keycode: Keycode) -> Option<u8> {
     match keycode {
         Keycode::Num1 => Some(0x1),
         Keycode::Num2 => Some(0x2),
@@ -229,13 +229,12 @@ impl Renderer {
         if let Ok(output) = std::process::Command::new("fc-match")
             .args(["--format=%{file}", "monospace"])
             .output()
+            && output.status.success()
         {
-            if output.status.success() {
-                let font_path = String::from_utf8_lossy(&output.stdout);
-                let font_path = font_path.trim();
-                if !font_path.is_empty() && std::path::Path::new(font_path).exists() {
-                    return Some(font_path.to_string());
-                }
+            let font_path = String::from_utf8_lossy(&output.stdout);
+            let font_path = font_path.trim();
+            if !font_path.is_empty() && std::path::Path::new(font_path).exists() {
+                return Some(font_path.to_string());
             }
         }
 
@@ -262,105 +261,63 @@ impl Renderer {
             }
         };
 
-        let texture_creator = self.debug_canvas.texture_creator();
-        let mut y_offset = 10;
-
-        // Draw V registers
-        for i in 0..16 {
+        let registers = (0..16).map(|i| {
             let text = format!("V{:X}: 0x{:02X} ({:3})", i, cpu_state.v[i], cpu_state.v[i]);
-            let surface = font
-                .render(&text)
-                .blended(Color::RGB(0, 255, 0))
-                .expect("Failed to render text");
-            let texture = texture_creator
-                .create_texture_from_surface(&surface)
-                .expect("Failed to create texture");
+            (text, Color::RGB(0, 255, 0))
+        });
+        let others = [
+            (
+                format!("I:  0x{:04X}", cpu_state.i),
+                Color::RGB(0, 200, 255),
+            ),
+            (
+                format!("PC: 0x{:04X}", cpu_state.pc),
+                Color::RGB(255, 200, 0),
+            ),
+            (
+                format!("SP: 0x{:02X}", cpu_state.sp),
+                Color::RGB(255, 100, 100),
+            ),
+            (
+                format!("DT: 0x{:02X}", cpu_state.delay_timer),
+                Color::RGB(200, 100, 255),
+            ),
+            (
+                format!("ST: 0x{:02X}", cpu_state.sound_timer),
+                Color::RGB(200, 100, 255),
+            ),
+        ];
 
-            let target = Rect::new(10, y_offset, surface.width(), surface.height());
-            self.debug_canvas
-                .copy(&texture, None, Some(target))
-                .expect("Failed to copy texture");
-
+        let mut y_offset = 10;
+        for (text, color) in registers {
+            draw_text(&mut self.debug_canvas, &font, &text, color, y_offset);
             y_offset += 18;
         }
 
         y_offset += 10;
 
-        // Draw I register
-        let text = format!("I:  0x{:04X}", cpu_state.i);
-        let surface = font
-            .render(&text)
-            .blended(Color::RGB(0, 200, 255))
-            .expect("Failed to render text");
-        let texture = texture_creator
-            .create_texture_from_surface(&surface)
-            .expect("Failed to create texture");
-        let target = Rect::new(10, y_offset, surface.width(), surface.height());
-        self.debug_canvas
-            .copy(&texture, None, Some(target))
-            .expect("Failed to copy texture");
-        y_offset += 18;
-
-        // Draw PC register
-        let text = format!("PC: 0x{:04X}", cpu_state.pc);
-        let surface = font
-            .render(&text)
-            .blended(Color::RGB(255, 200, 0))
-            .expect("Failed to render text");
-        let texture = texture_creator
-            .create_texture_from_surface(&surface)
-            .expect("Failed to create texture");
-        let target = Rect::new(10, y_offset, surface.width(), surface.height());
-        self.debug_canvas
-            .copy(&texture, None, Some(target))
-            .expect("Failed to copy texture");
-        y_offset += 18;
-
-        // Draw SP register
-        let text = format!("SP: 0x{:02X}", cpu_state.sp);
-        let surface = font
-            .render(&text)
-            .blended(Color::RGB(255, 100, 100))
-            .expect("Failed to render text");
-        let texture = texture_creator
-            .create_texture_from_surface(&surface)
-            .expect("Failed to create texture");
-        let target = Rect::new(10, y_offset, surface.width(), surface.height());
-        self.debug_canvas
-            .copy(&texture, None, Some(target))
-            .expect("Failed to copy texture");
-        y_offset += 18;
-
-        // Draw timers
-        let text = format!("DT: 0x{:02X}", cpu_state.delay_timer);
-        let surface = font
-            .render(&text)
-            .blended(Color::RGB(200, 100, 255))
-            .expect("Failed to render text");
-        let texture = texture_creator
-            .create_texture_from_surface(&surface)
-            .expect("Failed to create texture");
-        let target = Rect::new(10, y_offset, surface.width(), surface.height());
-        self.debug_canvas
-            .copy(&texture, None, Some(target))
-            .expect("Failed to copy texture");
-        y_offset += 18;
-
-        let text = format!("ST: 0x{:02X}", cpu_state.sound_timer);
-        let surface = font
-            .render(&text)
-            .blended(Color::RGB(200, 100, 255))
-            .expect("Failed to render text");
-        let texture = texture_creator
-            .create_texture_from_surface(&surface)
-            .expect("Failed to create texture");
-        let target = Rect::new(10, y_offset, surface.width(), surface.height());
-        self.debug_canvas
-            .copy(&texture, None, Some(target))
-            .expect("Failed to copy texture");
+        for (text, color) in others {
+            draw_text(&mut self.debug_canvas, &font, &text, color, y_offset);
+            y_offset += 18;
+        }
 
         self.debug_canvas.present();
     }
+}
+
+fn draw_text(canvas: &mut Canvas<Window>, font: &Font, text: &str, color: Color, y: i32) {
+    let surface = font
+        .render(text)
+        .blended(color)
+        .expect("Failed to render text");
+    let texture_creator = canvas.texture_creator();
+    let texture = texture_creator
+        .create_texture_from_surface(&surface)
+        .expect("Failed to create texture");
+    let target = Rect::new(10, y, surface.width(), surface.height());
+    canvas
+        .copy(&texture, None, Some(target))
+        .expect("Failed to copy texture");
 }
 
 pub struct EmulatorSdl2 {
@@ -368,47 +325,54 @@ pub struct EmulatorSdl2 {
     renderer: Renderer,
 }
 
-impl Emulator for EmulatorSdl2 {
-    fn new(rom: &[u8]) -> Self {
+impl EmulatorSdl2 {
+    pub fn new(chip8: Chip8) -> Self {
         Self {
-            chip8: Chip8::new(rom),
+            chip8,
             renderer: Renderer::new(),
         }
     }
 
-    fn step_frame(&mut self) -> bool {
+    /// Runs until the window closes or the ROM faults.
+    pub fn run(&mut self) -> Result<(), Error> {
+        while self.step_frame()? {}
+        Ok(())
+    }
+
+    /// Returns false once the user asks to quit.
+    fn step_frame(&mut self) -> Result<bool, Error> {
         let frame_start = Instant::now();
 
         // Handle input
         for event in self.renderer.event_pump().poll_iter() {
             match event {
                 Event::Quit { .. } => {
-                    return false;
+                    return Ok(false);
                 }
                 Event::Window {
                     win_event: WindowEvent::Close,
                     ..
                 } => {
-                    return false;
+                    return Ok(false);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Escape),
                     ..
                 } => {
-                    return false;
+                    return Ok(false);
                 }
                 Event::KeyDown {
                     keycode: Some(key), ..
                 } => {
                     if let Some(chip8_key) = keycode_to_chip8(key) {
-                        self.chip8.set_key(chip8_key as u8, true);
+                        self.chip8.set_key(chip8_key, true);
                     }
                 }
                 Event::KeyUp {
                     keycode: Some(key), ..
                 } => {
                     if let Some(chip8_key) = keycode_to_chip8(key) {
-                        self.chip8.set_key(chip8_key as u8, false);
+                        self.chip8.set_key(chip8_key, false);
                     }
                 }
                 _ => {}
@@ -416,7 +380,7 @@ impl Emulator for EmulatorSdl2 {
         }
 
         // Run CPU cycles for this frame
-        self.chip8.step_frame();
+        self.chip8.step_frame()?;
 
         // Update audio and render
         self.renderer.update_audio(self.chip8.sound_timer());
@@ -429,28 +393,6 @@ impl Emulator for EmulatorSdl2 {
             std::thread::sleep(FRAME_DURATION - elapsed);
         }
 
-        true
-    }
-
-    fn set_key(&mut self, key: u8, pressed: bool) {
-        self.chip8.set_key(key, pressed);
-    }
-
-    fn display(&self) -> &[u8] {
-        self.chip8.display()
-    }
-
-    fn sound_timer(&self) -> u8 {
-        self.chip8.sound_timer()
-    }
-}
-
-impl EmulatorSdl2 {
-    pub fn run(&mut self) {
-        loop {
-            if !self.step_frame() {
-                break;
-            }
-        }
+        Ok(true)
     }
 }
