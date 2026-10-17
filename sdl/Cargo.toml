@@ -3,6 +3,7 @@ name = "emuchip-8-sdl"
 version = "0.1.0"
 edition = "2024"
 description = "SDL2 frontend for emuchip-8"
+publish = false
 
 [dependencies]
 emuchip-8 = { path = ".." }

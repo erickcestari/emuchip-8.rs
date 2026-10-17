@@ -7,3 +7,5 @@ version = "0.1.0"
 edition = "2024"
 description = "Platform-agnostic CHIP-8 interpreter core: no_std, no dependencies"
 repository = "https://github.com/erickcestari/emuchip-8.rs"
+license = "MIT"
+include = ["src/**", "Cargo.toml", "LICENSE"]
